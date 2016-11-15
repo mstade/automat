@@ -1,0 +1,2 @@
+--flags es2017
+--flags modules:commonjs
