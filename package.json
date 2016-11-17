@@ -16,7 +16,7 @@
   "scripts": {
     "build": "ez-build --production @build.opts",
     "build:dev": "ez-build --interactive @build.opts",
-    "test": "node -r babel-polyfill -r source-map-support/register lib/test/http.js",
+    "test": "node -r babel-polyfill -r source-map-support/register lib/test/${TEST-http}.js",
     "test:dev": "npm run -s build:dev | while read -r line; do echo \"${line}\"; npm run -s test; done"
   },
   "repository": {
