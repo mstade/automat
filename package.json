@@ -9,7 +9,7 @@
     "lib": "lib"
   },
   "devDependencies": {
-    "@zambezi/ez-build": "0.6.0-deprecate-babelrc.1",
+    "@zambezi/ez-build": "0.6.0",
     "babel-polyfill": "6.16.0",
     "source-map-support": "0.4.6"
   },
