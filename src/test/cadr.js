@@ -11,26 +11,26 @@ const fsm = Automat('init',
   }
 )
 
+console.log()
 console.log(fsm)
 
-fsm.enter = (input, { context, state, cond }) => {
-  console.log(`${context} => ${state}(${input === undefined? '' : input})`)
+;['cadr', 'cada', 'cadar', 'cadrr'].reduce(async (last, input) => {
+  await last
 
-  if (input !== cond) {
-    console.log(`\t${cond}`)
+  let path = []
+
+  fsm.every.enter = (char, _, { state }) => {
+    path.push(`=> ${state} (${char})`)
   }
-}
 
-fsm.exit = (_, { context, state, next }) => {
-  console.log(`${context} <= ${state}`)
-}
+  fsm.end = (_, { state }) => {
+    path.push(`|> ${String(state)}`)
+  }
 
-Promise.all(
-    ['car', 'cdr', 'cadr', 'cddr', 'cddar', 'crad']
-      .map((stream, i) => {
-        console.log('start:', i)
-        return fsm(stream, i)
-      })
-  )
-  .then(r => console.log('done:', r))
-  .catch(e => console.log('error:', e))
+  try {
+    let result = await fsm(input)
+    console.log(path.join(' '), `= ${result}`)
+  } catch (e) {
+    console.log(path.join(' '), `x> ${e}`)
+  }
+}, {})

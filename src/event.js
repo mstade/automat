@@ -5,12 +5,8 @@ function event(defaultHandler = Function.prototype) {
 
   return {
     get: () => handler,
-    set: (fn = defaultHandler) => {
-      if (typeof fn !== 'function') {
-        throw new TypeError('Event handler must be a function')
-      }
-
-      handler = fn
+    set: (val = defaultHandler) => {
+      handler = typeof val === 'function'? val : () => val
     }
   }
 }

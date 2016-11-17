@@ -1,76 +1,92 @@
-import event from './event'
-import { parse, end } from './parse'
-import { StateError } from './errors'
+import { build, end } from './spec'
+import AutomatError from './errors'
 
 export { defineAutomat, defineAutomat as default }
 
 Object.defineProperty(defineAutomat, 'end', { value: end })
 
 function defineAutomat(start, spec) {
-  const state = {}
-  const stateEnter = {}
-  const stateExit = {}
-  const trace = Object.defineProperties({},
-    { enter: event()
-    , exit: event()
+  const
+    { state
+    , every
+    , enter
+    , exit
+    } = Object.defineProperties(automat, build(spec))
+
+  let isRunning = false
+  Object.defineProperty(automat, 'isRunning',
+    { get: () => isRunning
+    , enumerable: true
     }
   )
-
-  Object.defineProperties(automat, {
-    states: { enumerable: true, value: state },
-    enter: { get: () => stateEnter, set: (fn) => trace.enter = fn },
-    exit: { get: () => stateExit, set: (fn) => trace.exit = fn }
-  })
-
-  for (let [name, transitions] of Object.entries(spec)) {
-    Object.defineProperty(state, name,
-      { enumerable: true
-      , value: parse(state, transitions)
-      }
-    )
-    Object.defineProperty(stateEnter, name, event(x => x))
-    Object.defineProperty(stateExit, name, event())
-  }
   
   return automat
 
-  async function automat(stream, context) {
+  async function automat(stream, context = stream) {
+    isRunning = true
+
     const tape = getIterator(stream)
-    let prev, next = start
+    let input = await tape.next()
+    let curr, prev, cond, next = start
 
-    while (true) {
-      let input = await tape.next()
-      const [ enter, current ] = [ stateEnter[next], next ]
+    automat.start(input.value, context, { state: next })
+    while (isRunning) {
+      let enterState = enter[next]
+      let transition = state[next]
+      curr = next
+      next = undefined
 
-      const cond = await enter(input.value, { state: current, prev, context })
-      await trace.enter(input.value, { state: current, prev, context, cond })
-
-      next = state[current][cond === undefined? '' : cond] || state[current]['']
-
-      if (next === undefined) {
-        throw new StateError(
-          `Undefined transition: ${current}(${cond})`
-        , { input, state: current, prev, cond, next, context }
+      if (input.done && input.value === undefined) {
+        isRunning = false
+        throw new AutomatError(
+          `Unexpected end of input, wanted: ${
+            Object.keys(transition).join(', ')
+          }`
+        , { stream, input, state: curr, prev, cond, next, context }
         )
       }
 
-      const exit = stateExit[current]
-      await exit(input.value, { state: current, prev, cond, next, context })
-      await trace.exit(input.value, { state: current, prev, cond, next, context })
-      prev = current
+      every.enter(input.value, context, { state: curr, prev })
+      cond = await enterState(input.value, context, { state: curr, prev })
 
-      if (next === end) {
-        return context
-      } else if (input.done) {
-        throw new StateError(
-          `Expected '${next}' state but got end of input`
-        , { input, state: current, prev, cond, next, context }
+      if (cond === undefined) {
+        cond = any
+      }
+
+      if (transition[cond]) {
+        next = transition[cond]
+      } else if (transition[any]) {
+        next = transition[any]
+        cond = any
+      } else {
+        isRunning = false
+        throw new AutomatError(
+          `Undefined condition: ${curr}(${cond})`
+        , { stream, input, state: curr, prev, cond, next, context }
         )
       }
+
+      isRunning = (next !== end && state[next] !== end)
+
+      exit[curr](input.value, context, { state: curr, prev, cond, next })
+      every.exit(input.value, context, { state: curr, prev, cond, next })
+
+      input = await tape.next()
+      prev = curr
     }
+
+    if (!input.done) {
+      throw new AutomatError(
+        `Unexpected end of machine; input isn't done`
+      , { stream, input, state: curr, prev, cond, next, context }
+      )
+    }
+
+    return automat.end(context, { state: next, prev, cond }), context
   }
 }
 
+const any = ''
 
 function getIterator(stream = []) {
   if (stream[Symbol.iterator]) {
@@ -90,4 +106,18 @@ function isGenerator({ constructor } = {}) {
 
 function isPromise({ then } = {}) {
   return typeof then === 'function'
+}
+
+function val(x, otherwise) {
+  if (typeof x === 'function') {
+    return x()
+  } else if (x === undefined) {
+    return otherwise
+  } else {
+    return val
+  }
+}
+
+function isUndef(x) {
+  return x === undefined
 }

@@ -1,12 +1,16 @@
-export class StateError extends Error {
-  constructor(message, { input, state, prev, cond, next, context }) {
+export default class AutomatError extends Error {
+  constructor(message, { stream, input, state, prev, cond, next, context, cause }) {
     super(message)
-    this.name = 'StateError'
-    this.input = input
-    this.state = state
-    this.prev = prev
-    this.cond = cond
-    this.next = next
-    this.context = context
+
+    Object.defineProperty(this, 'name', { value: AutomatError.name })
+    set(this, { stream, input, state, prev, cond, next, context, cause })
+  }
+}
+
+function set(host, props) {
+  for (let [k, v] of Object.entries(props)) {
+    if (v !== undefined) {
+      host[k] = v
+    }
   }
 }

@@ -1,45 +1,51 @@
-import { http, protocol } from './http-machine'
+import { createResource, createWeb } from './http-machine'
 
-function * request(method, target) {
-  const req = Object.defineProperties({},
-    { method : { value: method  , enumerable: true }
-    , target : { value: target  , enumerable: true }
-    , header : { value: {}      , enumerable: true }
-    , body   : { writable: true , enumerable: true }
-    , toString: { value: () => `${method} ${target}` }
-    }
-  )
+const web = createWeb()
 
-  while (true) yield req
-}
+const resource = createResource()
 
-protocol.enter = (req, { state, cond }) => {
-  console.log(`=> ${state} (${req})`)
-
-  if (req !== cond) {
-    console.log(`\t${cond}`)
-  }
-}
-
-protocol.exit = (_, { state, next }) => {
-  console.log(`<= ${state}`)
-}
-
-protocol.enter.is_service_available = _ => {
-  return Math.random() < 0.8? 'yes' : 'no'
-}
+web.register('/foo', resource)
 
 console.log()
-console.log(protocol)
 
-timed(http(request('GET', '/foo'))).then(({ result, duration }) => {
+timed(() => {
+  let indent = ''
+
+  resource.start = (req, res) => {
+    res.log = []
+    res.start = process.hrtime()
+    let method = req.method.slice(0, 3)
+    res.log.push(`───────▸ ${method}╶╮`)
+  }
+
+  resource.every.exit = (req, res, { state, cond, next }) => {
+    let indent = '             ├'
+    res.log.push(`${indent} ${state}${cond && ':'} ${cond}`)
+  }
+
+  resource.end = (res) => {
+    const time = process.hrtime(res.start)
+    time.ns = time[0] * 1e9 + time[1]
+    time.us = time.ns / 1e3
+    time.ms = time.ns / 1e6
+    time.s  = time.ns / 1e9
+
+    const code = res.status? res.status[0] : 200
+
+    res.log.forEach(entry => {
+      console.log(entry)
+    })
+    console.log(`◂─╴${time.ms.toFixed(1)}ms ${code}╶╯`)
+  }
+  
+  return web.request('GET', '/foo')
+}).then(({ result, duration }) => {
   console.log(`response time: ${duration.ms}ms`)
-  console.log(`response: ${result.res.code} ${result.res.message}\n`)
-})
+}, console.error.bind(console))
 
 async function timed(proc) {
   const start = process.hrtime()
-  const result = await proc
+  const result = await (typeof proc === 'function'? proc() : proc)
   const duration = process.hrtime(start)
 
   duration.ns = duration[0] * 1e9 + duration[1]
